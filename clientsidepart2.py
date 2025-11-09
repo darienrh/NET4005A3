@@ -54,7 +54,7 @@ if __name__ == "__main__":
 
     with socket.create_connection((HOST, PORT)) as s:
         s.sendall(json.dumps(payload).encode())
-        print("[Client] Message sent securely. Waiting for encrypted server response...")
+        print("[Client] Message sent securely. Waiting for encrypted server response")
 
         resp = json.loads(s.recv(4096).decode())
         reply_nonce = base64.b64decode(resp["nonce"])
