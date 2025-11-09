@@ -1,4 +1,3 @@
-# clientsidepart1.py
 import socket, json, base64
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
