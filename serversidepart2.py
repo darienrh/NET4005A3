@@ -1,5 +1,5 @@
 # serversidepart2.py
-import socket, json, base64
+import socket, json, base64, os
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -59,6 +59,28 @@ if __name__ == "__main__":
 
             if verify(client_pub, msg, sig):
                 print("Verified message:", msg.decode())
-                conn.sendall(b"Message verified and received (Part 2).")
+                if verify(client_pub, msg, sig):
+                    print("[Server] Message and signature verified successfully.")
+
+                    # Encrypt a reply using the same AES key and nonce (but safer to use a new nonce)
+                    reply_nonce = os.urandom(12)
+                    reply_text = b"Message verified and received securely (Part 2, bidirectional)."
+                    reply_ciphertext = AESGCM(key).encrypt(reply_nonce, reply_text, None)
+
+                    response_payload = {
+                        "nonce": base64.b64encode(reply_nonce).decode(),
+                        "ciphertext": base64.b64encode(reply_ciphertext).decode()
+                    }
+                    conn.sendall(json.dumps(response_payload).encode())
+                else:
+                    reply_nonce = os.urandom(12)
+                    reply_text = b"Signature verification failed."
+                    reply_ciphertext = AESGCM(key).encrypt(reply_nonce, reply_text, None)
+
+                    response_payload = {
+                        "nonce": base64.b64encode(reply_nonce).decode(),
+                        "ciphertext": base64.b64encode(reply_ciphertext).decode()
+                    }
+                    conn.sendall(json.dumps(response_payload).encode())
             else:
                 conn.sendall(b"Signature verification failed.")

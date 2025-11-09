@@ -54,4 +54,10 @@ if __name__ == "__main__":
 
     with socket.create_connection((HOST, PORT)) as s:
         s.sendall(json.dumps(payload).encode())
-        print("Response:", s.recv(4096).decode())
+        print("[Client] Message sent securely. Waiting for encrypted server response...")
+
+        resp = json.loads(s.recv(4096).decode())
+        reply_nonce = base64.b64decode(resp["nonce"])
+        reply_ciphertext = base64.b64decode(resp["ciphertext"])
+        reply_plain = AESGCM(key).decrypt(reply_nonce, reply_ciphertext, None)
+        print("[Client] Secure reply from server:", reply_plain.decode())
