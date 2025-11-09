@@ -1,85 +1,60 @@
-"""
-serversidepart1.py
-Part 1: RSA-only server
-- Decrypts entire message using server private key.
-- Verifies client signature using client public key.
-"""
+# serversidepart1.py
 import socket, json, base64
-from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes
 
 HOST = "127.0.0.1"
-PORT = 65432
+PORT = 4444
 
-def load_priv(path):
-    with open(path, "rb") as f:
-        return serialization.load_pem_private_key(f.read(), None)
+def load_private_key(p):
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key
+    return load_pem_private_key(open(p, "rb").read(), password=None)
 
-def load_pub(path):
-    with open(path, "rb") as f:
-        return serialization.load_pem_public_key(f.read())
+def load_public_key(p):
+    from cryptography.hazmat.primitives.serialization import load_pem_public_key
+    return load_pem_public_key(open(p, "rb").read())
 
-def recv_exact(conn, n):
-    data = b""
-    while len(data) < n:
-        pkt = conn.recv(n - len(data))
-        if not pkt:
-            return None
-        data += pkt
-    return data
+def ub64(s): return base64.b64decode(s.encode())
 
-def verify_sig(pub, msg, sig):
+def rsa_decrypt(priv, ct):
+    return priv.decrypt(
+        ct,
+        padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                     algorithm=hashes.SHA256(),
+                     label=None)
+    )
+
+def verify(pub, msg, sig):
     try:
         pub.verify(
             sig, msg,
-            padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                        salt_length=padding.PSS.MAX_LENGTH),
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
             hashes.SHA256()
         )
         return True
     except Exception:
         return False
 
-def parse_plain(plaintext):
-    ln = int.from_bytes(plaintext[:4], "big")
-    msg = plaintext[4:4+ln]
-    sig = plaintext[4+ln:]
-    return msg, sig
+if __name__ == "__main__":
+    server_priv = load_private_key("server_private_key.pem")
+    client_pub  = load_public_key("client_public_key.pem")
 
-def main():
-    priv = load_priv("server_private.pem")
-    client_pub = load_pub("client_public.pem")
-    with socket.socket() as s:
+    print("Server (Part 1) listening on port", PORT)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, PORT))
         s.listen(1)
-        print(f"[Part1] Server listening on {HOST}:{PORT}")
-        while True:
-            conn, addr = s.accept()
-            with conn:
-                print(f"[Part1] Connection from {addr}")
-                length = recv_exact(conn, 8)
-                if not length: continue
-                size = int.from_bytes(length, "big")
-                payload = recv_exact(conn, size)
-                if not payload: continue
-                data = json.loads(payload.decode())
-                cipher = base64.b64decode(data["ciphertext"])
-                try:
-                    plain = priv.decrypt(
-                        cipher,
-                        padding.OAEP(mgf=padding.MGF1(hashes.SHA256()),
-                                     algorithm=hashes.SHA256(),
-                                     label=None)
-                    )
-                except Exception as e:
-                    print("Decryption error:", e)
-                    continue
-                msg, sig = parse_plain(plain)
-                if verify_sig(client_pub, msg, sig):
-                    print("Signature verified ✓")
-                    print("Message:", msg.decode(errors="replace"))
-                else:
-                    print("Signature failed ✗")
+        conn, addr = s.accept()
+        with conn:
+            print("Connected by", addr)
+            data = json.loads(conn.recv(65536).decode())
+            enc = ub64(data["payload"])
+            plain = rsa_decrypt(server_priv, enc)
+            obj = json.loads(plain.decode())
+            msg = base64.b64decode(obj["message"])
+            sig = base64.b64decode(obj["signature"])
 
-if __name__ == "__main__":
-    main()
+            if verify(client_pub, msg, sig):
+                print("Verified message:", msg.decode())
+                conn.sendall(b"Message verified and received.")
+            else:
+                conn.sendall(b"Signature verification failed.")

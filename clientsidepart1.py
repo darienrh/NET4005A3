@@ -1,59 +1,47 @@
-"""
-clientsidepart1.py
-Part 1: RSA-only client
-- Encrypts and signs message using RSA.
-"""
+# clientsidepart1.py
 import socket, json, base64
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
 HOST = "127.0.0.1"
-PORT = 65432
+PORT = 4444
 
-def load_priv(path):
-    with open(path, "rb") as f:
-        return serialization.load_pem_private_key(f.read(), None)
+def load_private_key(path):
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key
+    return load_pem_private_key(open(path, "rb").read(), password=None)
 
-def load_pub(path):
-    with open(path, "rb") as f:
-        return serialization.load_pem_public_key(f.read())
+def load_public_key(path):
+    from cryptography.hazmat.primitives.serialization import load_pem_public_key
+    return load_pem_public_key(open(path, "rb").read())
 
-def send_payload(port, data):
-    with socket.socket() as s:
-        s.connect((HOST, port))
-        s.sendall(len(data).to_bytes(8, "big"))
-        s.sendall(data)
+def b64(x): return base64.b64encode(x).decode()
 
-def make_package(msg, sig):
-    return len(msg).to_bytes(4, "big") + msg + sig
-
-def sign(priv, msg):
+def sign_message(priv, msg):
     return priv.sign(
         msg,
-        padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH),
+        padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
         hashes.SHA256()
     )
 
-def main():
-    priv = load_priv("client_private.pem")
-    server_pub = load_pub("server_public.pem")
-    text = input("Enter short message (Part1): ").encode()
-    sig = sign(priv, text)
-    pkg = make_package(text, sig)
-    try:
-        cipher = server_pub.encrypt(
-            pkg,
-            padding.OAEP(mgf=padding.MGF1(hashes.SHA256()),
-                         algorithm=hashes.SHA256(),
-                         label=None)
-        )
-    except Exception as e:
-        print("Message too long for RSA:", e)
-        return
-    payload = json.dumps({"ciphertext": base64.b64encode(cipher).decode()}).encode()
-    send_payload(PORT, payload)
-    print("[Part1] Sent encrypted message.")
+def rsa_encrypt(pub, data):
+    return pub.encrypt(
+        data,
+        padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                     algorithm=hashes.SHA256(),
+                     label=None)
+    )
 
 if __name__ == "__main__":
-    main()
+    client_priv = load_private_key("client_private_key.pem")
+    server_pub  = load_public_key("server_public_key.pem")
+
+    message = input("Enter message to send: ").encode()
+    signature = sign_message(client_priv, message)
+
+    pkg = json.dumps({"message": b64(message), "signature": b64(signature)}).encode()
+    encrypted = rsa_encrypt(server_pub, pkg)
+    payload = {"mode": "part1", "payload": b64(encrypted)}
+
+    with socket.create_connection((HOST, PORT)) as s:
+        s.sendall(json.dumps(payload).encode())
+        print("Response:", s.recv(4096).decode())

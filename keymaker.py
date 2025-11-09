@@ -1,28 +1,37 @@
-"""
-keymaker.py
-Generates RSA 2048-bit keys for both client and server.
-"""
+# keygen.py
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
+import pathlib
 
-def make_keys(name_prefix: str):
-    priv = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    priv_pem = priv.private_bytes(
+def gen_rsa_keypair(bits=2048):
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=bits)
+    public_key = private_key.public_key()
+    return private_key, public_key
+
+def save_private_key(private_key, filename):
+    pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption()
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
     )
-    pub_pem = priv.public_key().public_bytes(
+    pathlib.Path(filename).write_bytes(pem)
+    print(f"Saved {filename}")
+
+def save_public_key(public_key, filename):
+    pem = public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
-    with open(f"{name_prefix}_private.pem", "wb") as f:
-        f.write(priv_pem)
-    with open(f"{name_prefix}_public.pem", "wb") as f:
-        f.write(pub_pem)
-    print(f"Generated {name_prefix}_private.pem / {name_prefix}_public.pem")
+    pathlib.Path(filename).write_bytes(pem)
+    print(f"Saved {filename}")
 
 if __name__ == "__main__":
-    make_keys("server")
-    make_keys("client")
-    print("All keys generated successfully.")
+    s_priv, s_pub = gen_rsa_keypair()
+    save_private_key(s_priv, "server_private_key.pem")
+    save_public_key(s_pub, "server_public_key.pem")
+
+    c_priv, c_pub = gen_rsa_keypair()
+    save_private_key(c_priv, "client_private_key.pem")
+    save_public_key(c_pub, "client_public_key.pem")
+
+    print("All RSA keys generated successfully.")
