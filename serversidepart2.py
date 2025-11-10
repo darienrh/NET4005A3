@@ -60,7 +60,7 @@ def verify_signature(public_key, message, signature):
                 mgf=padding.MGF1(hashes.SHA256()),
                 salt_length=padding.PSS.MAX_LENGTH
             ),
-            hashes.SHA256()
+            hashes.SHA256() # Use SHA-256 for hashing
         )
         return True
     except Exception as e:
