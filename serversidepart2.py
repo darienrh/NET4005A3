@@ -115,6 +115,7 @@ def handle_client(conn, addr, server_priv, client_pub):
             
             conn.sendall(json.dumps(response).encode())
             logger.info(f"Sent encrypted response to {client_ip}")
+            conn.shutdown(socket.SHUT_WR)
             
         else:
             logger.warning(f"Invalid signature from {client_ip}")
@@ -140,6 +141,7 @@ def handle_client(conn, addr, server_priv, client_pub):
         # Don't send sensitive error details to client
         conn.sendall(b"Server error occurred")
     finally:
+        logger.info(f"End of handle_client() reached for {client_ip}")
         logger.info(f"Closed connection with {client_ip}")
 
 def main():

@@ -1,57 +1,141 @@
-# clientsidepart2.py
-import socket, json, base64, os
+# secure_client.py
+"""
+Quick client for testing the secure message thing
+Just shows what your message looks like encrypted and then decrypted
+"""
+
+import socket
+import json
+import base64
+import os
+import time
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-HOST = "127.0.0.1"
-PORT = 4444
+# yeah these should be config but whatever for testing
+server_ip = "127.0.0.1"
+server_port = 4444
 
-def load_private_key(p):
+def grab_my_private_key():
+    """Get my private key file - crashes if missing"""
     from cryptography.hazmat.primitives.serialization import load_pem_private_key
-    return load_pem_private_key(open(p, "rb").read(), password=None)
+    # hardcoded path because we're lazy
+    priv_key_file = "client_private_key.pem"
+    try:
+        with open(priv_key_file, "rb") as f:
+            return load_pem_private_key(f.read(), password=None)
+    except:
+        print(f"CRAP: Can't find {priv_key_file} - make sure it's in the same folder")
+        raise
 
-def load_public_key(p):
+def grab_server_pubkey():
+    """Get server's public key"""
     from cryptography.hazmat.primitives.serialization import load_pem_public_key
-    return load_pem_public_key(open(p, "rb").read())
+    # another hardcoded path
+    pub_key_file = "server_public_key.pem"
+    try:
+        with open(pub_key_file, "rb") as f:
+            return load_pem_public_key(f.read())
+    except:
+        print(f"UGH: Missing {pub_key_file} - get it from the server")
+        raise
 
-def b64(x): return base64.b64encode(x).decode()
+def to_b64(data):
+    """Convert bytes to base64 string"""
+    return base64.b64encode(data).decode('ascii')
 
-def sign(priv, msg):
-    return priv.sign(
-        msg,
-        padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
-        hashes.SHA256()
+def sign_my_message(my_priv_key, msg_data):
+    """Sign the message so server knows it's from me"""
+    # Using PSS because it's supposed to be better than the old PKCS1
+    signature = my_priv_key.sign(
+        msg_data,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH,  # max salt for security i guess
+        ),
+        hashes.SHA256(),
     )
+    return signature
 
-def rsa_encrypt(pub, data):
-    return pub.encrypt(
-        data,
-        padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                     algorithm=hashes.SHA256(),
-                     label=None)
+def rsa_wrap_key(server_pubkey, aes_key):
+    """Encrypt the AES key with server's RSA key"""
+    # OAEP padding is what everyone says to use now
+    wrapped_key = server_pubkey.encrypt(
+        aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
     )
+    return wrapped_key
 
-if __name__ == "__main__":
-    client_priv = load_private_key("client_private_key.pem")
-    server_pub  = load_public_key("server_public_key.pem")
-
-    msg = input("Enter message to send: ").encode()
-    sig = sign(client_priv, msg)
-    plain = json.dumps({"message": b64(msg), "signature": b64(sig)}).encode()
-
-    key = os.urandom(32)
-    nonce = os.urandom(12)
-    ct = AESGCM(key).encrypt(nonce, plain, None)
-    enc_key = rsa_encrypt(server_pub, key)
-
+def main():
+    # Load keys - will crash if files missing
+    my_priv_key = grab_my_private_key()
+    server_pubkey = grab_server_pubkey()
+    
+    # Get what user wants to send
+    user_msg = input("Type message to send: ").strip()
+    if not user_msg:
+        print("Seriously? Type something...")
+        return
+        
+    msg_bytes = user_msg.encode("utf-8")
+    
+    # Show what we're working with
+    print(f"\nOK, your message is: '{user_msg}'")
+    
+    # Sign it first
+    my_sig = sign_my_message(my_priv_key, msg_bytes)
+    
+    # Bundle it up with signature and timestamp
+    msg_bundle = {
+        "message": to_b64(msg_bytes),
+        "signature": to_b64(my_sig),
+        "sent_at": time.time()  # for replay protection maybe
+    }
+    bundle_json = json.dumps(msg_bundle).encode('utf-8')
+    
+    # Make a random AES key and encrypt the bundle
+    aes_key = os.urandom(32)  # 256-bit key
+    nonce_val = os.urandom(12)  # GCM wants 12 bytes
+    cipher = AESGCM(aes_key)
+    encrypted_data = cipher.encrypt(nonce_val, bundle_json, None)
+    
+    # Show the encrypted version
+    encrypted_b64 = to_b64(encrypted_data)
+    print(f"Encrypted gibberish: {encrypted_b64[:60]}...")  # just show first part
+    
+    # Now decrypt it back to prove it works
+    decrypted = cipher.decrypt(nonce_val, encrypted_data, None)
+    unpacked = json.loads(decrypted.decode())
+    original_msg = base64.b64decode(unpacked['message']).decode('utf-8')
+    print(f"Decrypted back to: '{original_msg}'")
+    
+    # Encrypt the AES key for the server and send everything
+    wrapped_aes_key = rsa_wrap_key(server_pubkey, aes_key)
+    
     payload = {
         "mode": "part2",
-        "enc_key": b64(enc_key),
-        "nonce": b64(nonce),
-        "ciphertext": b64(ct)
+        "enc_key": to_b64(wrapped_aes_key),
+        "nonce": to_b64(nonce_val), 
+        "ciphertext": encrypted_b64
     }
+    
+    # Try to send to server but don't really care if it fails
+    try:
+        sock = socket.create_connection((server_ip, server_port), timeout=3.0)
+        sock.sendall(json.dumps(payload).encode('utf-8'))
+        sock.close()
+        print("(Message sent to server)")
+    except socket.timeout:
+        print("(Server timeout - maybe it's not running?)")
+    except ConnectionRefusedError:
+        print("(Server refused connection - probably not running)")
+    except Exception as e:
+        print(f"(Failed to send: {e})")
 
-    with socket.create_connection((HOST, PORT)) as s:
-        s.sendall(json.dumps(payload).encode())
-        print("Response!:", s.recv(4096).decode())
+if __name__ == "__main__":
+    main()
