@@ -7,40 +7,44 @@ from pathlib import Path
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import padding as sym_padding
+import os
 
-# Config - would normally come from env or config file
+# connection settings
 HOST = "127.0.0.1" 
 PORT = 4444
-CLIENT_KEY_FILE = "client_private_key.pem"
-SERVER_KEY_FILE = "server_public_key.pem"
+CLIENT_PRIV_KEY = "client_private_key.pem"
+SERVER_PUB_KEY = "server_public_key.pem"
 
-def load_priv_key(path):
-    """Load PEM private key - throws if file missing or invalid"""
-    key_path = Path(path)
-    if not key_path.exists():
-        raise FileNotFoundError(f"Private key file {path} not found")
+def get_private_key(key_path):
+    """grab our private key file"""
+    key_file = Path(key_path)
+    if not key_file.exists():
+        raise FileNotFoundError(f"can't find private key at {key_path}")
     
-    with open(path, "rb") as f:
-        return load_pem_private_key(f.read(), password=None)
+    with open(key_path, "rb") as f:
+        key_data = f.read()
+        return load_pem_private_key(key_data, password=None)
 
-def load_pub_key(path):
-    """Load PEM public key - throws if file missing or invalid"""
-    key_path = Path(path)
-    if not key_path.exists():
-        raise FileNotFoundError(f"Public key file {path} not found")
+def get_public_key(key_path):
+    """load up a public key"""
+    key_file = Path(key_path)
+    if not key_file.exists():
+        raise FileNotFoundError(f"public key missing: {key_path}")
     
-    with open(path, "rb") as f:
-        return load_pem_public_key(f.read())
+    with open(key_path, "rb") as f:
+        key_data = f.read()
+        return load_pem_public_key(key_data)
 
-def b64e(data):
-    """Base64 encode bytes to string"""
+def to_base64(data):
+    """convert bytes to base64 string"""
     return base64.b64encode(data).decode('ascii')
 
-def sign_msg(priv_key, msg_data):
-    """Sign message using PSS padding - can throw on crypto errors"""
-    # Using MAX_LENGTH for salt per our security reqs
+def create_signature(priv_key, message_data):
+    """sign the message with our private key"""
     return priv_key.sign(
-        msg_data,
+        message_data,
         padding.PSS(
             mgf=padding.MGF1(hashes.SHA256()),
             salt_length=padding.PSS.MAX_LENGTH
@@ -48,10 +52,10 @@ def sign_msg(priv_key, msg_data):
         hashes.SHA256()
     )
 
-def rsa_encrypt(pub_key, plain_data):
-    """RSA encrypt using OAEP - can throw on crypto errors"""
+def rsa_encrypt_data(pub_key, data):
+    """encrypt with RSA using OAEP"""
     return pub_key.encrypt(
-        plain_data,
+        data,
         padding.OAEP(
             mgf=padding.MGF1(algorithm=hashes.SHA256()),
             algorithm=hashes.SHA256(),
@@ -59,56 +63,83 @@ def rsa_encrypt(pub_key, plain_data):
         )
     )
 
+def aes_encrypt(key, plaintext):
+    """encrypt data with AES-CBC"""
+    # random IV for this encryption
+    iv = os.urandom(16)
+    
+    # pad the data to block size
+    padder = sym_padding.PKCS7(128).padder()
+    padded_data = padder.update(plaintext) + padder.finalize()
+    
+    # do the encryption
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+    encryptor = cipher.encryptor()
+    ciphertext = encryptor.update(padded_data) + encryptor.finalize()
+    
+    return iv, ciphertext
+
 def main():
-    # Load crypto keys first - fail fast if missing
+    # load our keys first thing
     try:
-        priv_key = load_priv_key(CLIENT_KEY_FILE)
-        pub_key = load_pub_key(SERVER_KEY_FILE)
-    except Exception as e:
-        print(f"FATAL: Failed to load keys - {e}", file=sys.stderr)
+        client_priv = get_private_key(CLIENT_PRIV_KEY)
+        server_pub = get_public_key(SERVER_PUB_KEY)
+    except Exception as err:
+        print(f"Failed loading keys: {err}", file=sys.stderr)
         sys.exit(1)
 
-    # Get user input
-    user_msg = input("Message to send: ").strip()
-    if not user_msg:
-        print("No message entered", file=sys.stderr)
+    # get the message from user
+    user_input = input("Enter your message: ").strip()
+    if not user_input:
+        print("no message provided", file=sys.stderr)
         return
     
-    msg_bytes = user_msg.encode('utf-8')
+    message_data = user_input.encode('utf-8')
     
     try:
-        # Sign the message
-        sig = sign_msg(priv_key, msg_bytes)
+        # sign the message with our private key
+        signature = create_signature(client_priv, message_data)
         
-        # Package and encrypt
-        msg_pkg = {
-            "msg": b64e(msg_bytes),
-            "sig": b64e(sig)
+        # make a random AES key for this session
+        session_key = os.urandom(32)
+        
+        # bundle up the message and signature
+        message_bundle = {
+            "msg": to_base64(message_data),
+            "sig": to_base64(signature)
         }
-        json_data = json.dumps(msg_pkg).encode('utf-8')
+        bundle_json = json.dumps(message_bundle).encode('utf-8')
         
-        encrypted = rsa_encrypt(pub_key, json_data)
+        # encrypt the bundle with AES
+        iv, encrypted_bundle = aes_encrypt(session_key, bundle_json)
         
-        # Prepare final payload
+        # encrypt the session key with server's public RSA key
+        encrypted_session_key = rsa_encrypt_data(server_pub, session_key)
+        
+        # final payload to send
         payload = {
-            "mode": "part1",
-            "data": b64e(encrypted)
+            "enc_key": to_base64(encrypted_session_key),
+            "iv": to_base64(iv),
+            "data": to_base64(encrypted_bundle)
         }
         
-        # Send over socket with timeout
+        # connect and send the data
         with socket.create_connection((HOST, PORT), timeout=10) as sock:
             sock.sendall(json.dumps(payload).encode('utf-8'))
             
-            # Get response
-            resp = sock.recv(4096).decode('utf-8')
-            print(f"Got response: {resp}")
+            # wait for server response
+            response = sock.recv(4096).decode('utf-8')
+            print(f"Server says: {response}")
             
     except socket.timeout:
-        print("Connection timed out", file=sys.stderr)
+        print("connection timed out", file=sys.stderr)
     except ConnectionRefusedError:
-        print(f"Can't connect to {HOST}:{PORT}", file=sys.stderr)
-    except Exception as e:
-        print(f"Error during crypto or comms: {e}", file=sys.stderr)
+        print(f"cannot reach server at {HOST}:{PORT}", file=sys.stderr)
+    except Exception as err:
+        print(f"something went wrong: {err}", file=sys.stderr)
+        # helpful for debugging but might remove in production
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
