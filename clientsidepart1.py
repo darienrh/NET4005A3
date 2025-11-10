@@ -80,16 +80,15 @@ def aes_encrypt(key, plaintext):
     return iv, ciphertext
 
 def main():
-    # load our keys first thing
     try:
-        client_priv = get_private_key(CLIENT_PRIV_KEY)
+        client_priv = get_private_key(CLIENT_PRIV_KEY) # load our private key
         server_pub = get_public_key(SERVER_PUB_KEY)
     except Exception as err:
         print(f"Failed loading keys: {err}", file=sys.stderr)
         sys.exit(1)
 
-    # get the message from user
-    user_input = input("Enter your message: ").strip()
+    
+    user_input = input("Enter your message: ").strip() #this gets user input
     if not user_input:
         print("no message provided", file=sys.stderr)
         return
@@ -101,7 +100,7 @@ def main():
         signature = create_signature(client_priv, message_data)
         
         # make a random AES key for this session
-        session_key = os.urandom(32)
+        session_key = os.urandom(32) # this will make a random aes key
         
         # bundle up the message and signature
         message_bundle = {
@@ -113,8 +112,8 @@ def main():
         # encrypt the bundle with AES
         iv, encrypted_bundle = aes_encrypt(session_key, bundle_json)
         
-        # encrypt the session key with server's public RSA key
-        encrypted_session_key = rsa_encrypt_data(server_pub, session_key)
+        encrypted_session_key = rsa_encrypt_data(server_pub, session_key)# this will encrypt the message with the session key
+
         
         # final payload to send
         payload = {
