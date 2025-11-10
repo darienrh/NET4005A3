@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
 
-# Set up basic logging - because print statements get messy
+# Set up basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('secure_server')
 
@@ -16,7 +16,7 @@ HOST = "127.0.0.1"
 PORT = 4444
 
 def load_private_key(path):
-    """Load the server's private key - keep this safe!"""
+    """Load the server's private key"""
     try:
         with open(path, 'rb') as f:
             key_data = f.read()

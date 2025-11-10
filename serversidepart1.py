@@ -39,7 +39,7 @@ class MessageServer:
         self.total_messages = 0
         
     def load_crypto_keys(self):
-        """get our RSA keys ready"""
+        """get RSA keys ready"""
         try:
             self.server_key = self.load_server_key(SERVER_PRIV_KEY)
             self.client_pub = self.load_client_pubkey(CLIENT_PUB_KEY)
@@ -50,7 +50,7 @@ class MessageServer:
             return False
 
     def load_server_key(self, key_file_path):
-        """load our server private key"""
+        """load server private key"""
         key_file = Path(key_file_path)
         if not key_file.exists():
             raise FileNotFoundError(f"server key file not found: {key_file_path}")

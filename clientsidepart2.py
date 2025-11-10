@@ -1,9 +1,3 @@
-# secure_client.py
-"""
-Quick client for testing the secure message thing
-Just shows what your message looks like encrypted and then decrypted
-"""
-
 import socket
 import json
 import base64
@@ -13,7 +7,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-# yeah these should be config but whatever for testing
 server_ip = "127.0.0.1"
 server_port = 4444
 
@@ -47,12 +40,12 @@ def to_b64(data):
 
 def sign_my_message(my_priv_key, msg_data):
     """Sign the message so server knows it's from me"""
-    # Using PSS because it's supposed to be better than the old PKCS1
+    # Using PSS because it's better than PKCS1
     signature = my_priv_key.sign(
         msg_data,
         padding.PSS(
             mgf=padding.MGF1(hashes.SHA256()),
-            salt_length=padding.PSS.MAX_LENGTH,  # max salt for security i guess
+            salt_length=padding.PSS.MAX_LENGTH,  # max salt for security
         ),
         hashes.SHA256(),
     )
@@ -60,7 +53,7 @@ def sign_my_message(my_priv_key, msg_data):
 
 def rsa_wrap_key(server_pubkey, aes_key):
     """Encrypt the AES key with server's RSA key"""
-    # OAEP padding is what everyone says to use now
+    # OAEP padding for security
     wrapped_key = server_pubkey.encrypt(
         aes_key,
         padding.OAEP(
@@ -94,7 +87,7 @@ def main():
     msg_bundle = {
         "message": to_b64(msg_bytes),
         "signature": to_b64(my_sig),
-        "sent_at": time.time()  # for replay protection maybe
+        "sent_at": time.time()  # for replay protection on server
     }
     bundle_json = json.dumps(msg_bundle).encode('utf-8')
     
@@ -106,9 +99,8 @@ def main():
     
     # Show the encrypted version
     encrypted_b64 = to_b64(encrypted_data)
-    print(f"Encrypted gibberish: {encrypted_b64[:60]}...")  # just show first part
+    print(f"Encrypted gibberish: {encrypted_b64[:60]}...")  # show first part
     
-    # Now decrypt it back to prove it works
     decrypted = cipher.decrypt(nonce_val, encrypted_data, None)
     unpacked = json.loads(decrypted.decode())
     original_msg = base64.b64decode(unpacked['message']).decode('utf-8')
@@ -124,7 +116,7 @@ def main():
         "ciphertext": encrypted_b64
     }
     
-    # Try to send to server but don't really care if it fails
+    # Try to send to server
     try:
         sock = socket.create_connection((server_ip, server_port), timeout=3.0)
         sock.sendall(json.dumps(payload).encode('utf-8'))
