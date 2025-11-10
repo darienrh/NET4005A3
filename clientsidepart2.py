@@ -1,3 +1,4 @@
+# clientsidepart2.py
 import socket, json, base64, os
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -53,10 +54,4 @@ if __name__ == "__main__":
 
     with socket.create_connection((HOST, PORT)) as s:
         s.sendall(json.dumps(payload).encode())
-        print("[Client] Message sent securely. Waiting for encrypted server response")
-
-        resp = json.loads(s.recv(4096).decode())
-        reply_nonce = base64.b64decode(resp["nonce"])
-        reply_ciphertext = base64.b64decode(resp["ciphertext"])
-        reply_plain = AESGCM(key).decrypt(reply_nonce, reply_ciphertext, None)
-        print("[Client] Secure reply from server:", reply_plain.decode())
+        print("Response!:", s.recv(4096).decode())
