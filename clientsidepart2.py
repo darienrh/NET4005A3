@@ -11,15 +11,14 @@ server_ip = "127.0.0.1"
 server_port = 4444
 
 def grab_my_private_key():
-    """Get my private key file - crashes if missing"""
+    """Get my private key file"""
     from cryptography.hazmat.primitives.serialization import load_pem_private_key
-    # hardcoded path because we're lazy
     priv_key_file = "client_private_key.pem"
     try:
         with open(priv_key_file, "rb") as f:
             return load_pem_private_key(f.read(), password=None)
     except:
-        print(f"CRAP: Can't find {priv_key_file} - make sure it's in the same folder")
+        print(f"Can't find {priv_key_file} - make sure it's in the same folder")
         raise
 
 def grab_server_pubkey():
@@ -31,7 +30,7 @@ def grab_server_pubkey():
         with open(pub_key_file, "rb") as f:
             return load_pem_public_key(f.read())
     except:
-        print(f"UGH: Missing {pub_key_file} - get it from the server")
+        print(f"Missing {pub_key_file} - get it from the server")
         raise
 
 def to_b64(data):
@@ -39,7 +38,7 @@ def to_b64(data):
     return base64.b64encode(data).decode('ascii')
 
 def sign_my_message(my_priv_key, msg_data):
-    """Sign the message so server knows it's from me"""
+    """Sign the message"""
     # Using PSS because it's better than PKCS1
     signature = my_priv_key.sign(
         msg_data,
@@ -72,7 +71,7 @@ def main():
     # Get what user wants to send
     user_msg = input("Type message to send: ").strip()
     if not user_msg:
-        print("Seriously? Type something...")
+        print("Type something!")
         return
         
     msg_bytes = user_msg.encode("utf-8")
