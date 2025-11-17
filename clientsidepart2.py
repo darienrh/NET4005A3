@@ -99,7 +99,7 @@ def main():
     
     # Show the encrypted version
     encrypted_b64 = to_b64(encrypted_data)
-    print(f"Encrypted gibberish: {encrypted_b64[:60]}...")  # show first part
+    print(f"Encrypted message: {encrypted_b64[:60]}...")  # show first part
     
     decrypted = cipher.decrypt(nonce_val, encrypted_data, None)
     unpacked = json.loads(decrypted.decode())
