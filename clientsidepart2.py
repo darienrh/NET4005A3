@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 server_ip = "127.0.0.1"
 server_port = 4444
-
+# Functions to grab keys
 def grab_my_private_key():
     """Get my private key file"""
     from cryptography.hazmat.primitives.serialization import load_pem_private_key
@@ -20,7 +20,7 @@ def grab_my_private_key():
     except:
         print(f"Can't find {priv_key_file} - make sure it's in the same folder")
         raise
-
+# grab server public key
 def grab_server_pubkey():
     """Get server's public key"""
     from cryptography.hazmat.primitives.serialization import load_pem_public_key

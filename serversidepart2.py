@@ -14,7 +14,7 @@ logger = logging.getLogger('secure_server')
 
 HOST = "127.0.0.1"
 PORT = 4444
-
+# Paths to key files
 def load_private_key(path):
     """Load the server's private key"""
     try:
@@ -24,7 +24,7 @@ def load_private_key(path):
     except Exception as e:
         logger.error(f"Failed to load private key from {path}: {e}")
         raise
-
+# Load the client's public key
 def load_public_key(path):
     """Load the client's public key"""
     try:
@@ -49,7 +49,7 @@ def rsa_decrypt(private_key, encrypted_data):
             label=None
         )
     )
-
+# verify signature function
 def verify_signature(public_key, message, signature):
     """Verify the message signature using PSS padding"""
     try:
@@ -66,7 +66,7 @@ def verify_signature(public_key, message, signature):
     except Exception as e:
         logger.warning(f"Signature verification failed: {e}")
         return False
-
+# Handle a client connection
 def handle_client(conn, addr, server_priv, client_pub):
     """Handle a single client connection"""
     client_ip = addr[0]
