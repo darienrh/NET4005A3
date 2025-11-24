@@ -76,7 +76,7 @@ def main():
         
     msg_bytes = user_msg.encode("utf-8")
     
-    # Show what we're working with
+    # Show the message
     print(f"\nOK, your message is: '{user_msg}'")
     
     # Sign it first
@@ -98,7 +98,7 @@ def main():
     
     # Show the encrypted version
     encrypted_b64 = to_b64(encrypted_data)
-    print(f"Encrypted message: {encrypted_b64[:60]}...")  # show first part
+    print(f"Encrypted message: {encrypted_b64[:60]}...")
     
     decrypted = cipher.decrypt(nonce_val, encrypted_data, None)
     unpacked = json.loads(decrypted.decode())
