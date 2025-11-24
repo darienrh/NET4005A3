@@ -27,7 +27,7 @@ PREREQUISITES:
 GENERATING KEYS: 
 run python .\keymaker.py if the keys arent showing up or are deleted
 
-TESTING PART 1 (ASYMMETRIC ONLY):
+TESTING PART 1:
 
 1. Start the server:
    run python .\serversidepart2.py
@@ -39,7 +39,7 @@ TESTING PART 1 (ASYMMETRIC ONLY):
    
 4. Observe both server logs and client response
 
-TESTING PART 2 (HYBRID ENCRYPTION):
+TESTING PART 2:
 
 1. Start the server (same as above):
     run python .\serversidepart2.py
