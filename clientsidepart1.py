@@ -136,7 +136,7 @@ def main():
         print(f"cannot reach server at {HOST}:{PORT}", file=sys.stderr)
     except Exception as err:
         print(f"something went wrong: {err}", file=sys.stderr)
-        # might remove later
+        
         import traceback
         traceback.print_exc()
 
