@@ -64,7 +64,6 @@ Server: RSA decrypt key -> AES decrypt -> Verify signature -> Encrypted response
 NOTES:
 The serversidepart2.py can handle both Part 1 and Part 2 clients
 Server runs on localhost:4444 by default
-All network communication uses JSON format
 
 AUTHOR: Darien R-H
 DATE: 2025-11-09
